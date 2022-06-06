@@ -1,0 +1,13 @@
+{
+    "files.associations": {
+        "in.h": "c",
+        "__availability": "c",
+        "__bit_reference": "c",
+        "__config": "c",
+        "__string": "c",
+        "tuple": "c",
+        "streambuf": "c",
+        "sstream": "c",
+        "algorithm": "c"
+    }
+}

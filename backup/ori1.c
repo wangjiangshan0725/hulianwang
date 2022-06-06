@@ -115,19 +115,19 @@ int main()
   int sockets;
   char *te;
   char testx[MAX_DATA];
-  char user[MAX_DATA];
-  char password[MAX_DATA];
-  char domin[MAX_DATA];
+  char user[MAX_DATA]="hill010725";
+  char password[MAX_DATA]="JPLGFRGKFPVJIXGU";
+  char domin[MAX_DATA]="pop3.126.com";
   printf("请输入域名：\n");
-  scanf("%s", domin);
+  // scanf("%s", domin);
   getchar();
   printf("请输入用户名：\n");
-  scanf("%s", user);
+  // scanf("%s", user);
   getchar();
   printf("请输入密码：\n");
   // scanf("%s",password);
   // getchar()
-  InputCode(password);
+  // InputCode(password);
   printf("\n密码：%s\n", password);
   sockets = conn(&domin, &user, &password);
   pop3_stat(sockets);
@@ -534,13 +534,13 @@ int base64()
     close(fd);
 
     /*移除临时文件*/
-    memset(bufs, 0, sizeof(bufs));
-    char *name;
-    name = FILE_NAME1;
-    remove(name);
-    char *name1;
-    name1 = FILE_NAME;
-    remove(name1);
+    // memset(bufs, 0, sizeof(bufs));
+    // char *name;
+    // name = FILE_NAME1;
+    // remove(name);
+    // char *name1;
+    // name1 = FILE_NAME;
+    // remove(name1);
   }
   // }else
   // printf("文件不存在\n");
