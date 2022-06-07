@@ -20,9 +20,9 @@
 
 typedef struct EmailStruct
 {
-    char name[BUFF_SIZE];        //本地文件名
-    char subject[BUFF_SIZE];     //主题
-    char content[BUFF_SIZE_BIG]; //解析后的明文正文
+    char name[BUFF_SIZE];        
+    char subject[BUFF_SIZE];     
+    char content[BUFF_SIZE_BIG]; 
 } Email;
 
 typedef enum POP3_OPTS
@@ -36,7 +36,7 @@ typedef enum POP3_OPTS
     POP3_QUIT
 } POP3_OPT;
 
-// function declarations
+
 int hiddenInput(char *password);
 int connectPop3(char *domain, char *username, char *password);
 int sendOpt(int sockfd, POP3_OPT opt, char *param);
@@ -211,7 +211,7 @@ int connectPop3(char *domain, char *username, char *password)
 
 int isOk(int sockfd)
 {
-    // return 1;
+    
     int recvLen;
     char recvBuffer[BUFF_SIZE];
     memset(recvBuffer, 0, BUFF_SIZE);
@@ -258,7 +258,7 @@ int sendOpt(int sockfd, POP3_OPT opt, char *param)
         break;
     }
 
-    // printf("len:%d,msg::%s\n", msgLen, msg);
+    
     if ((send(sockfd, msg, msgLen, 0)) != msgLen)
     {
         printf("ERROR: Send msg to POP3 server failed. Please re-login.\n");
@@ -352,10 +352,10 @@ unsigned char *base64_encode(unsigned char *str)
     long str_len;
     unsigned char *res;
     int i, j;
-    //定义base64编码表
+    
     unsigned char *base64_table = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
-    //计算经过base64编码后的字符串长度
+    
     str_len = strlen(str);
     if (str_len % 3 == 0)
         len = str_len / 3 * 4;
@@ -365,13 +365,13 @@ unsigned char *base64_encode(unsigned char *str)
     res = malloc(sizeof(unsigned char) * len + 1);
     res[len] = '\0';
 
-    //以3个8位字符为一组进行编码
+    
     for (i = 0, j = 0; i < len - 2; j += 3, i += 4)
     {
-        res[i] = base64_table[str[j] >> 2];                                     //取出第一个字符的前6位并找出对应的结果字符
-        res[i + 1] = base64_table[(str[j] & 0x3) << 4 | (str[j + 1] >> 4)];     //将第一个字符的后位与第二个字符的前4位进行组合并找到对应的结果字符
-        res[i + 2] = base64_table[(str[j + 1] & 0xf) << 2 | (str[j + 2] >> 6)]; //将第二个字符的后4位与第三个字符的前2位组合并找出对应的结果字符
-        res[i + 3] = base64_table[str[j + 2] & 0x3f];                           //取出第三个字符的后6位并找出结果字符
+        res[i] = base64_table[str[j] >> 2];                                     
+        res[i + 1] = base64_table[(str[j] & 0x3) << 4 | (str[j + 1] >> 4)];     
+        res[i + 2] = base64_table[(str[j + 1] & 0xf) << 2 | (str[j + 2] >> 6)]; 
+        res[i + 3] = base64_table[str[j + 2] & 0x3f];                           
     }
 
     switch (str_len % 3)
@@ -390,7 +390,7 @@ unsigned char *base64_encode(unsigned char *str)
 
 unsigned char *base64_decode(unsigned char *code)
 {
-    //根据base64表，以字符找到对应的十进制数据
+    
     int table[] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -408,9 +408,9 @@ unsigned char *base64_decode(unsigned char *code)
     unsigned char *res;
     int i, j;
 
-    //计算解码后的字符串长度
+    
     len = strlen(code);
-    //判断编码后的字符串后是否有=
+    
     if (strstr(code, "=="))
         str_len = len / 4 * 3 - 2;
     else if (strstr(code, "="))
@@ -421,12 +421,12 @@ unsigned char *base64_decode(unsigned char *code)
     res = malloc(sizeof(unsigned char) * str_len + 1);
     res[str_len] = '\0';
 
-    //以4个字符为一位进行解码
+    
     for (i = 0, j = 0; i < len - 2; j += 3, i += 4)
     {
-        res[j] = ((unsigned char)table[code[i]]) << 2 | (((unsigned char)table[code[i + 1]]) >> 4);           //取出第一个字符对应base64表的十进制数的前6位与第二个字符对应base64表的十进制数的后2位进行组合
-        res[j + 1] = (((unsigned char)table[code[i + 1]]) << 4) | (((unsigned char)table[code[i + 2]]) >> 2); //取出第二个字符对应base64表的十进制数的后4位与第三个字符对应bas464表的十进制数的后4位进行组合
-        res[j + 2] = (((unsigned char)table[code[i + 2]]) << 6) | ((unsigned char)table[code[i + 3]]);        //取出第三个字符对应base64表的十进制数的后2位与第4个字符进行组合
+        res[j] = ((unsigned char)table[code[i]]) << 2 | (((unsigned char)table[code[i + 1]]) >> 4);           
+        res[j + 1] = (((unsigned char)table[code[i + 1]]) << 4) | (((unsigned char)table[code[i + 2]]) >> 2); 
+        res[j + 2] = (((unsigned char)table[code[i + 2]]) << 6) | ((unsigned char)table[code[i + 3]]);        
     }
 
     return res;
@@ -434,27 +434,27 @@ unsigned char *base64_decode(unsigned char *code)
 
 int hiddenInput(char *password)
 {
-    // https://blog.csdn.net/qq_44192078/article/details/104412489
+    
     int i = 0;
-    system("stty -icanon"); //设置一次性读完操作，即getchar()不用回车也能获取字符
-    system("stty -echo");   //关闭回显，即输入任何字符都不显示
+    system("stty -icanon"); 
+    system("stty -echo");   
     while (i < 16)
     {
-        password[i] = getchar(); //获取键盘的值到数组中
+        password[i] = getchar(); 
         if (i == 0 && password[i] == '\b')
         {
-            i = 0; //若开始没有值，输入删除，则，不算值
+            i = 0; 
             password[i] = '\0';
             continue;
         }
         else if (password[i] == '\b')
         {
-            printf("\b \b"); //若删除，则光标前移，输空格覆盖，再光标前移
+            printf("\b \b"); 
             password[i] = '\0';
-            i = i - 1; //返回到前一个值继续输入
-            continue;  //结束当前循环
+            i = i - 1; 
+            continue;  
         }
-        else if (password[i] == '\n') //若按回车则，输入结束
+        else if (password[i] == '\n') 
         {
             password[i] = '\0';
             break;
@@ -465,16 +465,16 @@ int hiddenInput(char *password)
         }
         i++;
     }
-    system("stty echo");   //开启回显
-    system("stty icanon"); //关闭一次性读完操作，即getchar()必须回车也能获取字符
+    system("stty echo");   
+    system("stty icanon"); 
     printf("\n");
     return i;
 }
 
 int substr(char dst[], char src[], int start, int len)
 {
-    char *p = src + start; //定义指针变量指向需要提取的字符的地址
-    int n = strlen(p);     //求字符串长度
+    char *p = src + start; 
+    int n = strlen(p);     
     int i = 0;
     if (n < len)
     {
@@ -485,7 +485,7 @@ int substr(char dst[], char src[], int start, int len)
         dst[i] = src[i + start];
         len--;
         i++;
-    } //复制字符串到dst中
+    } 
     dst[i] = '\0';
     return 0;
 }
@@ -634,13 +634,13 @@ int dispSubject(char *domain, char *username)
             int begin = strchr(c, '*') - c + 1;
             int end = strchr(c, '\0') - c;
             int len = end - begin;
-            //    		文件最后一行加换行符
+            
             substr(email_sub, c, begin, len);
 
             begin = strchr(c, '$') - c + 1;
             end = strchr(c, '*') - c;
             len = end - begin;
-            //    		文件最后一行加换行符
+            
             substr(email_name, c, begin, len);
             printf("the %s mail's Subject is: %s", email_name, email_sub);
         }
