@@ -113,7 +113,8 @@ int main()
             scanf("%s", param);
             email = retr(sockfd, "./tmp.eml", param);
             system("cat ./tmp.eml");
-            printf("%s email %s , %s", email.name, email.subject, email.content);
+            printf("\n\nDecoded Email Subject: %s\n\nContent: %s\n\n", email.subject, email.content);
+            system("rm ./tmp.eml");
             break;
         case 4:
             printf("Please input the text you want to search:\n>>");
@@ -131,7 +132,7 @@ int main()
             scanf("%s", filename);
             email = retr(sockfd, filename, param);
             saveTxt(domain, username, email);
-            // sendOpt(sockfd, POP3_DELE, param);
+            sendOpt(sockfd, POP3_DELE, param);
             printf("Save successfully and delete from the remote server.");
             break;
         default:
@@ -270,7 +271,7 @@ int sendOpt(int sockfd, POP3_OPT opt, char *param)
 Email retr(int sockfd, char *filename, char *param)
 {
 
-    char rec_buf[BUFF_SIZE_BIG];
+    char recvBuffer[BUFF_SIZE_BIG];
     int fd, len;
     int pos, total = -1;
     char *t;
@@ -282,39 +283,39 @@ Email retr(int sockfd, char *filename, char *param)
         printf("err:create %s failed\n", filename);
         exit(1);
     }
-    bzero(rec_buf, BUFF_SIZE_BIG);
-    if ((len = recv(sockfd, rec_buf, BUFF_SIZE_BIG, 0)) > 0)
+    bzero(recvBuffer, BUFF_SIZE_BIG);
+    if ((len = recv(sockfd, recvBuffer, BUFF_SIZE_BIG, 0)) > 0)
     {
-        if (strncmp(rec_buf, "+OK", 3) == 0)
+        if (strncmp(recvBuffer, "+OK", 3) == 0)
         {
-            if ((t = strstr(rec_buf, " ")) != NULL)
+            if ((t = strstr(recvBuffer, " ")) != NULL)
             {
                 t++;
                 total = atoi(t);
             }
-            if ((t = strstr(rec_buf, "\r\n")) != NULL)
+            if ((t = strstr(recvBuffer, "\r\n")) != NULL)
             {
                 t += 2;
-                pos = (int)(t - rec_buf);
+                pos = (int)(t - recvBuffer);
 
                 if ((len = write(fd, t, len - pos)) == (len - pos))
-                    bzero(rec_buf, BUFF_SIZE_BIG);
+                    bzero(recvBuffer, BUFF_SIZE_BIG);
                 pos = len;
             }
         }
     }
-    while ((len = recv(sockfd, rec_buf, BUFF_SIZE_BIG, 0)) > 0)
+    while ((len = recv(sockfd, recvBuffer, BUFF_SIZE_BIG, 0)) > 0)
     {
         pos += len;
         if (pos >= total)
             break;
-        if ((len = write(fd, rec_buf, len)) == len)
-            bzero(rec_buf, BUFF_SIZE_BIG);
+        if ((len = write(fd, recvBuffer, len)) == len)
+            bzero(recvBuffer, BUFF_SIZE_BIG);
 
         else
             break;
     }
-    if ((len = write(fd, rec_buf, len - 3)) == len)
+    if ((len = write(fd, recvBuffer, len - 3)) == len)
     {
 
         close(fd);
@@ -329,29 +330,24 @@ Email retr(int sockfd, char *filename, char *param)
 }
 int showList(int sockfd, char *param)
 {
-    char rec_buf[BUFF_SIZE];
-    int len, email_total = -1;
+    char recvBuffer[BUFF_SIZE];
+    int len;
     char tmp[BUFF_SIZE];
     char *t;
 
     sendOpt(sockfd, POP3_LIST, param);
-    bzero(rec_buf, BUFF_SIZE);
-    while ((len = recv(sockfd, rec_buf, BUFF_SIZE, 0)) > 0)
+    bzero(recvBuffer, BUFF_SIZE);
+    while ((len = recv(sockfd, recvBuffer, BUFF_SIZE, 0)) > 0)
     {
-        printf("me:%s\n", rec_buf);
-        if (strstr(rec_buf, "\r\n.") != NULL)
+        printf("%s\n", recvBuffer);
+        if (strstr(recvBuffer, "\r\n.") != NULL)
             break;
         else
-            strncpy(tmp, rec_buf, len);
-        bzero(rec_buf, BUFF_SIZE);
+            strncpy(tmp, recvBuffer, len);
+        bzero(recvBuffer, BUFF_SIZE);
     }
     if (len > 3)
-        rec_buf[len - 5] = '\0';
-
-    if (strncmp(rec_buf, "+OK", 3) == 0)
-    {
-        email_total = atoi(&rec_buf[4]);
-    }
+        recvBuffer[len - 5] = '\0';
 }
 unsigned char *base64_encode(unsigned char *str)
 {
@@ -517,6 +513,9 @@ Email decodeEml(char *filename)
             int pos = strchr(c, '\n') - c - 1;
             int i = 0;
             substr(a.subject, c, 9, pos);
+            char *find = strchr(a.subject, '\n');
+            if (find)
+                *find = '\0';
         }
 
         if (!find_kg)
@@ -530,15 +529,19 @@ Email decodeEml(char *filename)
             }
             else
             {
-                if (c[0] == '\n')
+                int pos = strchr(c, '\n') - c - 1;
+                if (pos == 0)
+                {
                     find_kg = 1;
+                }
             }
         }
         else
         {
             if (!find_next_kg)
             {
-                if (c[0] != '\n')
+                int pos = strchr(c, '\n') - c - 1;
+                if (pos != 0)
                 {
                     strcpy(content, c);
                 }
@@ -548,10 +551,15 @@ Email decodeEml(char *filename)
                 }
             }
         }
-        if (!strcmp(c, "Content-Transfer-Encoding: base64\n"))
+        if (!strcmp(c, "Content-Transfer-Encoding: base64\r\n"))
         {
             decode = 1;
         }
+    }
+    char *rnPtr;
+    if (rnPtr = strstr(content, "\n"))
+    {
+        rnPtr[0] = '\0';
     }
     printf("ctn:%s\n", content);
     if (decode == 1)
@@ -577,7 +585,7 @@ int searchContent(char *domain, char *username, char *searching)
     FILE *fptr1 = fopen(filename, "r");
     if (fptr1 == NULL)
     {
-        printf("ERROR: No email have been downloaded, please download first.");
+        printf("ERROR: No email have been downloaded, please download first.\n");
         exit(1);
     }
     int flag = 0;
@@ -617,7 +625,7 @@ int dispSubject(char *domain, char *username)
     FILE *fptr1 = fopen(filename, "r");
     if (fptr1 == NULL)
     {
-        printf("ERROR: No email have been downloaded, please download first.");
+        printf("ERROR: No email have been downloaded, please download first.\n");
         exit(1);
     }
     while (fgets(c, sizeof(c), fptr1) != NULL)

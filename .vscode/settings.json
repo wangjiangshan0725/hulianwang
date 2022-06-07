@@ -8,6 +8,7 @@
         "tuple": "c",
         "streambuf": "c",
         "sstream": "c",
-        "algorithm": "c"
+        "algorithm": "c",
+        "locale": "c"
     }
 }
