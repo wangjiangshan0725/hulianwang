@@ -14,18 +14,18 @@
 #include <string.h>
 
 #define BUFF_SIZE 255
-#define BUFF_SIZE_BIG 10240
+#define BUFF_SIZE_BIG 65535
 
 #define POP3_PORT 110
 
-typedef struct EmailStruct
+typedef struct EmailStruct //邮件结构体
 {
     char name[BUFF_SIZE];        //本地文件名
     char subject[BUFF_SIZE];     //主题
     char content[BUFF_SIZE_BIG]; //解析后的明文正文
 } Email;
 
-typedef enum POP3_OPTS
+typedef enum POP3_OPTS // POP3结构体
 {
     POP3_USER = 1,
     POP3_PASS,
@@ -36,7 +36,7 @@ typedef enum POP3_OPTS
     POP3_QUIT
 } POP3_OPT;
 
-// function declarations
+// 函数定义
 int hiddenInput(char *password);
 int connectPop3(char *domain, char *username, char *password);
 int sendOpt(int sockfd, POP3_OPT opt, char *param);
@@ -54,7 +54,6 @@ unsigned char *base64_decode(unsigned char *code);
 int main()
 {
     int sockfd;
-    char *te;
     char username[BUFF_SIZE];
     char password[BUFF_SIZE];
     char domain[BUFF_SIZE];
@@ -93,11 +92,7 @@ int main()
         printf("****************************\n");
         printf("Please choose number:\n>>");
         scanf("%d", &option);
-        if (option == 7)
-        {
-            close(sockfd);
-            exit(0);
-        }
+
         switch (option)
         {
         case 1:
@@ -112,9 +107,9 @@ int main()
             printf("Input email number to view in detail\n>>");
             scanf("%s", param);
             email = retr(sockfd, "./tmp.eml", param);
-            system("cat ./tmp.eml");
+            // system("cat ./tmp.eml");
             printf("\n\nDecoded Email Subject: %s\n\nContent: %s\n\n", email.subject, email.content);
-            system("rm ./tmp.eml");
+            // system("rm ./tmp.eml");
             break;
         case 4:
             printf("Please input the text you want to search:\n>>");
@@ -135,6 +130,9 @@ int main()
             sendOpt(sockfd, POP3_DELE, param);
             printf("Save successfully and delete from the remote server.");
             break;
+        case 7:
+            close(sockfd);
+            exit(0);
         default:
             printf("Invalid option\n");
             break;
@@ -162,19 +160,24 @@ int connectPop3(char *domain, char *username, char *password)
     char ipAddr[32];
     struct hostent *hostPtr;
 
-    if ((hostPtr = gethostbyname(domain)) == NULL)
+    if ((hostPtr = gethostbyname(domain)) == NULL) //将域名转换为主机结构
     {
         printf("ERROR: failed to parse domain into host.");
-        return 0;
+        exit(1);
     }
     addrListPtr = hostPtr->h_addr_list;
-    inet_ntop(hostPtr->h_addrtype, *addrListPtr, ipAddr, sizeof(ipAddr));
+    inet_ntop(hostPtr->h_addrtype, *addrListPtr, ipAddr, sizeof(ipAddr)); //主机结构中的ip地址转点分ip地址
 
     sockfd = socket(AF_INET, SOCK_STREAM, 0);
     if (sockfd == -1)
     {
         printf("ERROR: Socket create failed");
+        exit(1);
     }
+    struct timeval tv;
+    tv.tv_sec = 3; //接收超时，单位秒
+    tv.tv_usec = 0;
+    setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, (const char *)&tv, sizeof tv); //设置接收超时时间
 
     sockAddr.sin_family = AF_INET;
     sockAddr.sin_port = htons(POP3_PORT);
@@ -192,6 +195,7 @@ int connectPop3(char *domain, char *username, char *password)
         printf("Connect: %s", buf);
     }
 
+    //依次发送USER和PASS且检查是否OK，全部OK返回sockfd
     if (sendOpt(sockfd, POP3_USER, username) == 1 && isOk(sockfd))
     {
         if (sendOpt(sockfd, POP3_PASS, password) == 1 && isOk(sockfd))
@@ -274,30 +278,35 @@ Email retr(int sockfd, char *filename, char *param)
     char recvBuffer[BUFF_SIZE_BIG];
     int fd, len;
     int pos, total = -1;
-    char *t;
+    char *t, *end;
     sendOpt(sockfd, POP3_RETR, param);
     if ((fd = open(filename, O_CREAT | O_RDWR | O_TRUNC, 0777)) == -1)
     {
         exit(1);
     }
     bzero(recvBuffer, BUFF_SIZE_BIG);
+    int finishFlag = 0;
     if ((len = recv(sockfd, recvBuffer, BUFF_SIZE_BIG, 0)) > 0)
     {
         if (strncmp(recvBuffer, "+OK", 3) == 0)
         {
             if ((t = strstr(recvBuffer, " ")) != NULL)
             {
-                t++;
+                t++; //找OK后的文本长度
                 total = atoi(t);
             }
             if ((t = strstr(recvBuffer, "\r\n")) != NULL)
             {
                 t += 2;
-                pos = (int)(t - recvBuffer);
-
-                if ((len = write(fd, t, len - pos)) == (len - pos))
-                    bzero(recvBuffer, BUFF_SIZE_BIG);
-                pos = len;
+                pos = (int)(t - recvBuffer);                         //找邮件体到消息体的长度
+                if ((end = strstr(recvBuffer, "\r\n.\r\n")) != NULL) //如果有结束符就结束
+                {
+                    finishFlag = 1;
+                    end += 2;
+                    end[0] = '\0'; //截断.后内容
+                    len -= 3;
+                }
+                write(fd, t, len - pos); //写从邮件体开始到结束的
             }
         }
         else
@@ -306,24 +315,21 @@ Email retr(int sockfd, char *filename, char *param)
             exit(1);
         }
     }
-    while ((len = recv(sockfd, recvBuffer, BUFF_SIZE_BIG, 0)) > 0)
-    {
-        pos += len;
-        if (pos >= total)
-            break;
-        if ((len = write(fd, recvBuffer, len)) == len)
-            bzero(recvBuffer, BUFF_SIZE_BIG);
-
-        else
-            break;
-    }
-    if ((len = write(fd, recvBuffer, len - 3)) == len)
+    while (!finishFlag && ((len = recv(sockfd, recvBuffer, BUFF_SIZE_BIG, 0)) > 0))
     {
 
-        close(fd);
-
-        return decodeEml(filename);
+        if ((end = strstr(t, ".\r\n")) != NULL)
+        {
+            finishFlag = 1;
+            len -= 3;
+            end[0] = '\0';
+        }
+        write(fd, recvBuffer, len);
+        bzero(recvBuffer, BUFF_SIZE_BIG);
     }
+
+    close(fd);
+    return decodeEml(filename);
 }
 int showList(int sockfd, char *param)
 {
