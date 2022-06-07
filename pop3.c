@@ -575,6 +575,11 @@ int searchContent(char *domain, char *username, char *searching)
     char c[1000];
     char email_name[100];
     FILE *fptr1 = fopen(filename, "r");
+    if (fptr1 == NULL)
+    {
+        printf("ERROR: No email have been downloaded, please download first.");
+        exit(1);
+    }
     int flag = 0;
     while (fgets(c, sizeof(c), fptr1) != NULL)
     {
@@ -610,6 +615,11 @@ int dispSubject(char *domain, char *username)
     sprintf(filename, "%s_%s.txt", domain, username);
     char c[1000];
     FILE *fptr1 = fopen(filename, "r");
+    if (fptr1 == NULL)
+    {
+        printf("ERROR: No email have been downloaded, please download first.");
+        exit(1);
+    }
     while (fgets(c, sizeof(c), fptr1) != NULL)
     {
         if (!strncmp(c, "-=-=boundary", 8))
@@ -636,7 +646,7 @@ int dispSubject(char *domain, char *username)
 void saveTxt(char *domain, char *username, Email email)
 {
     char filename[BUFF_SIZE];
-    printf("fname:%s\n", filename);
+    sprintf(filename, "%s_%s.txt", domain, username);
     FILE *fp;
     fp = fopen(filename, "r");
     if (fp == NULL)
