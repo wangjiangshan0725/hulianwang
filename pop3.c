@@ -53,6 +53,10 @@ unsigned char *base64_decode(unsigned char *code);
 
 int main()
 {
+    // Email em = decodeEml("./tmp.eml");
+    // // system("cat ./tmp.eml");
+    // printf("\nDecoded Email Subject: %s\nContent: %s\n", em.subject, em.content);
+    // return 0;
     int sockfd;
     char username[BUFF_SIZE];
     char password[BUFF_SIZE];
@@ -65,11 +69,11 @@ int main()
     getchar();
     printf("Input password:\n>>");
     hiddenInput(password);
-    if (domain[0] = '.')
+    if (domain[0] == '.')
         sprintf(domain, "pop3.126.com");
-    if (username[0] = '.')
+    if (username[0] == '.')
         sprintf(username, "hill010725");
-    if (password[0] = '.')
+    if (password[0] == '.')
         sprintf(password, "JPLGFRGKFPVJIXGU");
 
     sockfd = connectPop3(domain, username, password);
@@ -107,9 +111,9 @@ int main()
             printf("Input email number to view in detail\n>>");
             scanf("%s", param);
             email = retr(sockfd, "./tmp.eml", param);
-            // system("cat ./tmp.eml");
+            system("cat ./tmp.eml");
             printf("\n\nDecoded Email Subject: %s\n\nContent: %s\n\n", email.subject, email.content);
-            // system("rm ./tmp.eml");
+            system("rm ./tmp.eml");
             break;
         case 4:
             printf("Please input the text you want to search:\n>>");
@@ -215,7 +219,6 @@ int connectPop3(char *domain, char *username, char *password)
 
 int isOk(int sockfd)
 {
-    // return 1;
     int recvLen;
     char recvBuffer[BUFF_SIZE];
     memset(recvBuffer, 0, BUFF_SIZE);
@@ -299,7 +302,7 @@ Email retr(int sockfd, char *filename, char *param)
             {
                 t += 2;
                 pos = (int)(t - recvBuffer);                         //找邮件体到消息体的长度
-                if ((end = strstr(recvBuffer, "\r\n.\r\n")) != NULL) //如果有结束符就结束
+                if ((end = strstr(recvBuffer, "\r\n.\r\n")) != NULL) //如果有结束符就结束，如果全在第一个报文，.前肯定有换行符
                 {
                     finishFlag = 1;
                     end += 2;
@@ -317,15 +320,18 @@ Email retr(int sockfd, char *filename, char *param)
     }
     while (!finishFlag && ((len = recv(sockfd, recvBuffer, BUFF_SIZE_BIG, 0)) > 0))
     {
-
-        if ((end = strstr(t, ".\r\n")) != NULL)
+        if (strncmp(recvBuffer, ".\r\n", 3) == 0) //最后一个包可能没有前导换行符，直接以这个.开始
+        {
+            finishFlag = 1;
+            break;
+        }
+        else if ((end = strstr(recvBuffer, "\r\n.\r\n")) != NULL)
         {
             finishFlag = 1;
             len -= 3;
             end[0] = '\0';
         }
         write(fd, recvBuffer, len);
-        bzero(recvBuffer, BUFF_SIZE_BIG);
     }
 
     close(fd);
@@ -352,50 +358,9 @@ int showList(int sockfd, char *param)
     if (len > 3)
         recvBuffer[len - 5] = '\0';
 }
-unsigned char *base64_encode(unsigned char *str)
-{
-    long len;
-    long str_len;
-    unsigned char *res;
-    int i, j;
-    //定义base64编码表
-    unsigned char *base64_table = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-
-    //计算经过base64编码后的字符串长度
-    str_len = strlen(str);
-    if (str_len % 3 == 0)
-        len = str_len / 3 * 4;
-    else
-        len = (str_len / 3 + 1) * 4;
-
-    res = malloc(sizeof(unsigned char) * len + 1);
-    res[len] = '\0';
-
-    //以3个8位字符为一组进行编码
-    for (i = 0, j = 0; i < len - 2; j += 3, i += 4)
-    {
-        res[i] = base64_table[str[j] >> 2];                                     //取出第一个字符的前6位并找出对应的结果字符
-        res[i + 1] = base64_table[(str[j] & 0x3) << 4 | (str[j + 1] >> 4)];     //将第一个字符的后位与第二个字符的前4位进行组合并找到对应的结果字符
-        res[i + 2] = base64_table[(str[j + 1] & 0xf) << 2 | (str[j + 2] >> 6)]; //将第二个字符的后4位与第三个字符的前2位组合并找出对应的结果字符
-        res[i + 3] = base64_table[str[j + 2] & 0x3f];                           //取出第三个字符的后6位并找出结果字符
-    }
-
-    switch (str_len % 3)
-    {
-    case 1:
-        res[i - 2] = '=';
-        res[i - 1] = '=';
-        break;
-    case 2:
-        res[i - 1] = '=';
-        break;
-    }
-
-    return res;
-}
-
 unsigned char *base64_decode(unsigned char *code)
 {
+    printf("decode:[%s]\n", code);
     //根据base64表，以字符找到对应的十进制数据
     int table[] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -413,7 +378,7 @@ unsigned char *base64_decode(unsigned char *code)
     long str_len;
     unsigned char *res;
     int i, j;
-
+    printf("1\n");
     //计算解码后的字符串长度
     len = strlen(code);
     //判断编码后的字符串后是否有=
@@ -423,17 +388,22 @@ unsigned char *base64_decode(unsigned char *code)
         str_len = len / 4 * 3 - 1;
     else
         str_len = len / 4 * 3;
+    printf("2\n");
 
     res = malloc(sizeof(unsigned char) * str_len + 1);
     res[str_len] = '\0';
+    printf("3\n");
 
     //以4个字符为一位进行解码
     for (i = 0, j = 0; i < len - 2; j += 3, i += 4)
     {
+        printf("%d\n", i);
+
         res[j] = ((unsigned char)table[code[i]]) << 2 | (((unsigned char)table[code[i + 1]]) >> 4);           //取出第一个字符对应base64表的十进制数的前6位与第二个字符对应base64表的十进制数的后2位进行组合
         res[j + 1] = (((unsigned char)table[code[i + 1]]) << 4) | (((unsigned char)table[code[i + 2]]) >> 2); //取出第二个字符对应base64表的十进制数的后4位与第三个字符对应bas464表的十进制数的后4位进行组合
         res[j + 2] = (((unsigned char)table[code[i + 2]]) << 6) | ((unsigned char)table[code[i + 3]]);        //取出第三个字符对应base64表的十进制数的后2位与第4个字符进行组合
     }
+    printf("res:%s\n", res);
 
     return res;
 }
@@ -506,74 +476,73 @@ Email decodeEml(char *filename)
     int find_kg = 0;
     int find_next_kg = 0;
     int decode = 0;
-    FILE *fptr = fopen(filename, "r");
-    char flag[] = "Content-Type: text/plain;";
 
+    char *contentNowPos = NULL;
+    char *temp;
+
+    int reading = 0;
+    char boundary[BUFF_SIZE];
+    FILE *fptr = fopen(filename, "r");
+    char *textFlag = "Content-Type: text/plain;";
+    int textFlagLen = strlen(textFlag);
+    char *subjectFlag = "Subject: ";
+    int subjectFlagLen = strlen(subjectFlag);
+    char *boundaryFlag = "boundary=\"";
+    int boundaryFlagLen = strlen(boundaryFlag);
+    char *base64Flag = "Content-Transfer-Encoding: base64\r\n";
+
+    memset(boundary, 0, BUFF_SIZE);
+    int ln = 0;
     while (fgets(c, sizeof(c), fptr) != NULL)
     {
-        if (c[0] == 'S' && c[1] == 'u')
+        ln++;
+        if (strncmp(c, subjectFlag, subjectFlagLen) == 0)
         {
-            int pos = strchr(c, '\n') - c - 1;
-            int i = 0;
-            substr(a.subject, c, 9, pos);
-            char *find = strchr(a.subject, '\n');
-            if (find)
-                *find = '\0';
+            int len = strstr(c, "\r\n") - c - subjectFlagLen; //找到主题字符串长度，用末尾指针减行首指针
+            memset(a.subject, 0, BUFF_SIZE);
+            substr(a.subject, c, subjectFlagLen, len);
+            continue;
+        }
+        if ((temp = strstr(c, boundaryFlag)) != NULL)
+        {
+            int len = strstr(c, "\"\r\n") - temp - boundaryFlagLen;
+            substr(boundary, temp, boundaryFlagLen, len);
+            continue;
         }
 
-        if (!find_kg)
+        if (strncmp(c, textFlag, textFlagLen) == 0)
         {
-            if (!find_tp)
-            {
-                if (!strncmp(c, flag, 24))
-                {
-                    find_tp = 1;
-                }
-            }
-            else
-            {
-                int pos = strchr(c, '\n') - c - 1;
-                if (pos == 0)
-                {
-                    find_kg = 1;
-                }
-            }
+            find_tp = 1;
+            continue;
         }
-        else
-        {
-            if (!find_next_kg)
-            {
-                int pos = strchr(c, '\n') - c - 1;
-                if (pos != 0)
-                {
-                    strcpy(content, c);
-                }
-                else
-                {
-                    find_next_kg = 1;
-                }
-            }
-        }
-        if (!strcmp(c, "Content-Transfer-Encoding: base64\r\n"))
+
+        if (!strcmp(c, base64Flag))
         {
             decode = 1;
+            continue;
+        }
+
+        if (!reading && find_tp && strcmp(c, "\r\n") == 0) //如果已经找到过text/plain且找到空行
+        {
+            reading = 1;
+            memset(content, 0, BUFF_SIZE);
+            contentNowPos = content; //将待写入的地方置为content起始
+            continue;
+        }
+        if (reading)
+        {
+            if ((boundary[0] != '\0' && strstr(c, boundary) != NULL) || strncmp(c, "\r\n", 2) == 0)
+            {
+                //如果在读取状态 且碰到boundary或空行则结束
+                break;
+            }
+
+            int len = strlen(c) - 2;
+            strncpy(contentNowPos, c, len);
+            contentNowPos += len; //下一行待写入的地方是这一行结束后
         }
     }
-    char *rnPtr;
-    if (rnPtr = strstr(content, "\n"))
-    {
-        rnPtr[0] = '\0';
-    }
-    printf("ctn:%s\n", content);
-    if (decode == 1)
-    {
-        strcpy(a.content, base64_decode(content));
-    }
-    else
-    {
-        strcpy(a.content, content);
-    }
-    fclose(fptr);
+    strcpy(a.content, decode ? base64_decode(content) : (unsigned char *)content);
     return a;
 }
 
