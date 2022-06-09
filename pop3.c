@@ -1,29 +1,28 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/types.h>
-#include <netinet/in.h>
-#include <sys/socket.h>
-#include <sys/wait.h>
 #include <netdb.h>
 #include <arpa/inet.h>
 #include <unistd.h>
 #include <fcntl.h>
-#include <string.h>
+#include <sys/types.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
+#include <sys/wait.h>
 
 #define BUFF_SIZE 255
 #define BUFF_SIZE_BIG 65535
 
 #define POP3_PORT 110
 
-typedef struct EmailStruct //邮件结构体
+typedef struct EmailStruct //解码后邮件结构体
 {
     char name[BUFF_SIZE];        //本地文件名
     char subject[BUFF_SIZE];     //主题
-    char content[BUFF_SIZE_BIG]; //解析后的明文正文
+    char content[BUFF_SIZE_BIG]; //正文
 } Email;
 
-typedef enum POP3_OPTS // POP3结构体
+typedef enum POP3_OPTS // POP3操作枚举
 {
     POP3_USER = 1,
     POP3_PASS,
@@ -35,7 +34,6 @@ typedef enum POP3_OPTS // POP3结构体
 } POP3_OPT;
 
 // 函数定义
-int hiddenInput(char *password);
 int connectPop3(char *domain, char *username, char *password);
 int sendOpt(int sockfd, POP3_OPT opt, char *param);
 Email retr(int sockfd, char *filename, char *param);
@@ -45,15 +43,11 @@ int searchContent(char *domain, char *username, char *searching);
 int dispSubject(char *domain, char *username);
 int showList(int sockfd, char *param);
 Email decodeEml(char *filename);
-
+int hiddenInput(char *password);
 unsigned char *base64_decode(unsigned char *code);
 
 int main()
 {
-    // Email em = decodeEml("./tmp.eml");
-    // // system("cat ./tmp.eml");
-    // printf("\nDecoded Email Subject: %s\nContent: %s\n", em.subject, em.content);
-    // return 0;
     int sockfd;
     char username[BUFF_SIZE];
     char password[BUFF_SIZE];
@@ -85,9 +79,9 @@ int main()
         printf("2.Get mail status\n");
         printf("3.Display mail in detail\n");
         printf("4.Search text in all mails\n");
-        printf("5.display by subjects\n");
+        printf("5.Display by subjects\n");
         printf("6.Download the mail and delete in the remote service\n");
-        printf("7.quit\n");
+        printf("7.Quit\n");
         printf("****************************\n");
         printf("Please choose number:\n>>");
         fflush(stdin);
@@ -165,13 +159,15 @@ int connectPop3(char *domain, char *username, char *password)
     char ipAddr[32];
     struct hostent *hostPtr;
 
-    if ((hostPtr = gethostbyname(domain)) == NULL) //将域名转换为主机结构
+    //将域名转换为主机结构
+    if ((hostPtr = gethostbyname(domain)) == NULL)
     {
         printf("ERROR: failed to parse domain into host.");
         exit(1);
     }
     addrListPtr = hostPtr->h_addr_list;
-    inet_ntop(hostPtr->h_addrtype, *addrListPtr, ipAddr, sizeof(ipAddr)); //主机结构中的ip地址转点分ip地址
+    //主机结构中的二进制ip地址转点分ip地址，传入connect
+    inet_ntop(hostPtr->h_addrtype, *addrListPtr, ipAddr, sizeof(ipAddr));
 
     sockfd = socket(AF_INET, SOCK_STREAM, 0);
     if (sockfd == -1)
@@ -253,7 +249,7 @@ int sendOpt(int sockfd, POP3_OPT opt, char *param)
         msgLen = sprintf(msg, "STAT\r\n");
         break;
     case POP3_LIST:
-        msgLen = param[0] == '\0' ? sprintf(msg, "LIST\r\n") : sprintf(msg, "LIST %s\r\n", param);
+        msgLen = sprintf(msg, "LIST\r\n");
         break;
     case POP3_RETR:
         msgLen = sprintf(msg, "RETR %s\r\n", param);
@@ -280,24 +276,19 @@ Email retr(int sockfd, char *filename, char *param)
 
     char recvBuffer[BUFF_SIZE_BIG];
     int fd, len;
-    int pos, total = -1;
+    int pos;
     char *t, *end;
     sendOpt(sockfd, POP3_RETR, param);
     if ((fd = open(filename, O_CREAT | O_RDWR | O_TRUNC, 0777)) == -1)
     {
         exit(1);
     }
-    bzero(recvBuffer, BUFF_SIZE_BIG);
+    memset(recvBuffer, 0, BUFF_SIZE_BIG);
     int finishFlag = 0;
     if ((len = recv(sockfd, recvBuffer, BUFF_SIZE_BIG, 0)) > 0)
     {
         if (strncmp(recvBuffer, "+OK", 3) == 0)
         {
-            if ((t = strstr(recvBuffer, " ")) != NULL)
-            {
-                t++; //找OK后的文本长度
-                total = atoi(t);
-            }
             if ((t = strstr(recvBuffer, "\r\n")) != NULL)
             {
                 t += 2;
@@ -320,7 +311,8 @@ Email retr(int sockfd, char *filename, char *param)
     }
     while (!finishFlag && ((len = recv(sockfd, recvBuffer, BUFF_SIZE_BIG, 0)) > 0))
     {
-        if (strncmp(recvBuffer, ".\r\n", 3) == 0) //最后一个包可能没有前导换行符，直接以这个.开始
+        //最后一个包可能没有前导换行符，直接以这个.开始
+        if (strncmp(recvBuffer, ".\r\n", 3) == 0)
         {
             finishFlag = 1;
             break;
@@ -345,7 +337,7 @@ int showList(int sockfd, char *param)
     char *t;
 
     sendOpt(sockfd, POP3_LIST, param);
-    bzero(recvBuffer, BUFF_SIZE);
+    memset(recvBuffer, 0, BUFF_SIZE);
     while ((len = recv(sockfd, recvBuffer, BUFF_SIZE, 0)) > 0)
     {
         printf("%s\n", recvBuffer);
@@ -353,7 +345,7 @@ int showList(int sockfd, char *param)
             break;
         else
             strncpy(tmp, recvBuffer, len);
-        bzero(recvBuffer, BUFF_SIZE);
+        memset(recvBuffer, 0, BUFF_SIZE);
     }
 }
 unsigned char *base64_decode(unsigned char *code)
@@ -490,7 +482,8 @@ Email decodeEml(char *filename)
         ln++;
         if (strncmp(c, subjectFlag, subjectFlagLen) == 0)
         {
-            int len = strstr(c, "\r\n") - c - subjectFlagLen; //找到主题字符串长度，用末尾指针减行首指针
+            //找到主题字符串长度，用末尾指针减行首指针
+            int len = strstr(c, "\r\n") - c - subjectFlagLen;
             memset(a.subject, 0, BUFF_SIZE);
             substr(a.subject, c, subjectFlagLen, len);
             continue;
@@ -513,12 +506,13 @@ Email decodeEml(char *filename)
             decode = 1;
             continue;
         }
-
-        if (!reading && find_tp && strcmp(c, "\r\n") == 0) //如果已经找到过text/plain且找到空行
+        //如果已经找到过text/plain且找到空行
+        if (!reading && find_tp && strcmp(c, "\r\n") == 0)
         {
             reading = 1;
             memset(content, 0, BUFF_SIZE);
-            contentNowPos = content; //将待写入的地方置为content起始
+            //将待写入的地方置为content起始
+            contentNowPos = content;
             continue;
         }
         if (reading)
@@ -531,7 +525,8 @@ Email decodeEml(char *filename)
 
             int len = strlen(c) - 2;
             strncpy(contentNowPos, c, len);
-            contentNowPos += len; //下一行待写入的地方是这一行结束后
+            //下一行待写入的地方是这一行结束后
+            contentNowPos += len;
         }
     }
     strcpy(a.content, decode ? base64_decode(content) : (unsigned char *)content);
