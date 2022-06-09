@@ -1,6 +1,5 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <errno.h>
 #include <string.h>
 #include <sys/types.h>
 #include <netinet/in.h>
@@ -10,7 +9,6 @@
 #include <arpa/inet.h>
 #include <unistd.h>
 #include <fcntl.h>
-#include <sys/stat.h>
 #include <string.h>
 
 #define BUFF_SIZE 255
@@ -48,7 +46,6 @@ int dispSubject(char *domain, char *username);
 int showList(int sockfd, char *param);
 Email decodeEml(char *filename);
 
-unsigned char *base64_encode(unsigned char *str);
 unsigned char *base64_decode(unsigned char *code);
 
 int main()
@@ -63,10 +60,10 @@ int main()
     char domain[BUFF_SIZE];
     printf("Input POP3 server domain:\n>>");
     scanf("%s", domain);
-    getchar();
+    fflush(stdin);
     printf("Input username:\n>>");
     scanf("%s", username);
-    getchar();
+    fflush(stdin);
     printf("Input password:\n>>");
     hiddenInput(password);
     if (domain[0] == '.')
@@ -77,8 +74,6 @@ int main()
         sprintf(password, "JPLGFRGKFPVJIXGU");
 
     sockfd = connectPop3(domain, username, password);
-    int option;
-    int selects;
     int len;
     char recvBuffer[BUFF_SIZE];
     char param[BUFF_SIZE];
@@ -95,58 +90,64 @@ int main()
         printf("7.quit\n");
         printf("****************************\n");
         printf("Please choose number:\n>>");
-        scanf("%d", &option);
+        fflush(stdin);
+        int opt = getchar();
 
-        switch (option)
+        switch (opt)
         {
-        case 1:
+        case '1':
             showList(sockfd, "");
             break;
-        case 2:
+        case '2':
             sendOpt(sockfd, POP3_STAT, "");
             len = recv(sockfd, recvBuffer, BUFF_SIZE, 0);
             printf("%s\n", recvBuffer);
             break;
-        case 3:
+        case '3':
             printf("Input email number to view in detail\n>>");
             scanf("%s", param);
+            fflush(stdin);
+
             email = retr(sockfd, "./tmp.eml", param);
             system("cat ./tmp.eml");
             printf("\n\nDecoded Email Subject: %s\n\nContent: %s\n\n", email.subject, email.content);
             system("rm ./tmp.eml");
             break;
-        case 4:
+        case '4':
             printf("Please input the text you want to search:\n>>");
             scanf("%s", param);
+            fflush(stdin);
             searchContent(domain, username, param);
             break;
-        case 5:
+        case '5':
             dispSubject(domain, username);
             break;
-        case 6:
+        case '6':
             printf("Input email number:\n>>");
             scanf("%s", param);
+            fflush(stdin);
             printf("Please input the filename you want to save:\n>>");
             char filename[50];
             scanf("%s", filename);
+            fflush(stdin);
             email = retr(sockfd, filename, param);
             saveTxt(domain, username, email);
             sendOpt(sockfd, POP3_DELE, param);
-            printf("Save successfully and delete from the remote server.");
+            printf("Save successfully and delete from the remote server.\n");
             break;
-        case 7:
+        case '7':
             close(sockfd);
             exit(0);
         default:
             printf("Invalid option\n");
             break;
         }
-        int selectAfter;
         printf("Press 1 to return to main interface\n");
         printf("Press others to quit\n");
         printf(">>");
-        scanf("%d", &selectAfter);
-        if (selectAfter != 1)
+        fflush(stdin);
+
+        if (getchar() != '1')
         {
             close(sockfd);
             exit(0);
@@ -265,7 +266,6 @@ int sendOpt(int sockfd, POP3_OPT opt, char *param)
         break;
     }
 
-    // printf("len:%d,msg::%s\n", msgLen, msg);
     if ((send(sockfd, msg, msgLen, 0)) != msgLen)
     {
         printf("ERROR: Send msg to POP3 server failed. Please re-login.\n");
@@ -355,12 +355,9 @@ int showList(int sockfd, char *param)
             strncpy(tmp, recvBuffer, len);
         bzero(recvBuffer, BUFF_SIZE);
     }
-    if (len > 3)
-        recvBuffer[len - 5] = '\0';
 }
 unsigned char *base64_decode(unsigned char *code)
 {
-    printf("decode:[%s]\n", code);
     //根据base64表，以字符找到对应的十进制数据
     int table[] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -378,7 +375,6 @@ unsigned char *base64_decode(unsigned char *code)
     long str_len;
     unsigned char *res;
     int i, j;
-    printf("1\n");
     //计算解码后的字符串长度
     len = strlen(code);
     //判断编码后的字符串后是否有=
@@ -388,22 +384,18 @@ unsigned char *base64_decode(unsigned char *code)
         str_len = len / 4 * 3 - 1;
     else
         str_len = len / 4 * 3;
-    printf("2\n");
 
     res = malloc(sizeof(unsigned char) * str_len + 1);
     res[str_len] = '\0';
-    printf("3\n");
 
     //以4个字符为一位进行解码
     for (i = 0, j = 0; i < len - 2; j += 3, i += 4)
     {
-        printf("%d\n", i);
 
         res[j] = ((unsigned char)table[code[i]]) << 2 | (((unsigned char)table[code[i + 1]]) >> 4);           //取出第一个字符对应base64表的十进制数的前6位与第二个字符对应base64表的十进制数的后2位进行组合
         res[j + 1] = (((unsigned char)table[code[i + 1]]) << 4) | (((unsigned char)table[code[i + 2]]) >> 2); //取出第二个字符对应base64表的十进制数的后4位与第三个字符对应bas464表的十进制数的后4位进行组合
         res[j + 2] = (((unsigned char)table[code[i + 2]]) << 6) | ((unsigned char)table[code[i + 3]]);        //取出第三个字符对应base64表的十进制数的后2位与第4个字符进行组合
     }
-    printf("res:%s\n", res);
 
     return res;
 }
