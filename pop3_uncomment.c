@@ -1,28 +1,24 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <errno.h>
 #include <string.h>
-#include <sys/types.h>
-#include <netinet/in.h>
-#include <sys/socket.h>
-#include <sys/wait.h>
 #include <netdb.h>
 #include <arpa/inet.h>
 #include <unistd.h>
 #include <fcntl.h>
-#include <sys/stat.h>
-#include <string.h>
+#include <sys/types.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
+#include <sys/wait.h>
 
 #define BUFF_SIZE 255
-#define BUFF_SIZE_BIG 10240
+#define BUFF_SIZE_BIG 65535
 
 #define POP3_PORT 110
-
 typedef struct EmailStruct
 {
-    char name[BUFF_SIZE];        
-    char subject[BUFF_SIZE];     
-    char content[BUFF_SIZE_BIG]; 
+    char name[BUFF_SIZE];
+    char subject[BUFF_SIZE];
+    char content[BUFF_SIZE_BIG];
 } Email;
 
 typedef enum POP3_OPTS
@@ -36,46 +32,55 @@ typedef enum POP3_OPTS
     POP3_QUIT
 } POP3_OPT;
 
-
-int hiddenInput(char *password);
 int connectPop3(char *domain, char *username, char *password);
 int sendOpt(int sockfd, POP3_OPT opt, char *param);
 Email retr(int sockfd, char *filename, char *param);
 void saveTxt(char *domain, char *username, Email email);
-int isOk(int sockfd);
+int recvOk(int sockfd);
 int searchContent(char *domain, char *username, char *searching);
 int dispSubject(char *domain, char *username);
 int showList(int sockfd, char *param);
 Email decodeEml(char *filename);
-
-unsigned char *base64_encode(unsigned char *str);
+int hiddenInput(char *password);
 unsigned char *base64_decode(unsigned char *code);
+
+void clean_stdin(void)
+{
+    int c;
+    do
+    {
+        c = getchar();
+    } while (c != '\n' && c != EOF);
+}
 
 int main()
 {
     int sockfd;
-    char *te;
     char username[BUFF_SIZE];
     char password[BUFF_SIZE];
     char domain[BUFF_SIZE];
     printf("Input POP3 server domain:\n>>");
     scanf("%s", domain);
-    getchar();
+    clean_stdin();
     printf("Input username:\n>>");
     scanf("%s", username);
-    getchar();
+    clean_stdin();
     printf("Input password:\n>>");
     hiddenInput(password);
-    if (domain[0] = '.')
+    if (domain[0] == '.')
         sprintf(domain, "pop3.126.com");
-    if (username[0] = '.')
+    else if (domain[0] == '/')
+        sprintf(domain, "pop3.163.com");
+    if (username[0] == '.')
         sprintf(username, "hill010725");
-    if (password[0] = '.')
+    else if (username[0] == '/')
+        sprintf(username, "YikaiWang2001");
+    if (password[0] == '.')
         sprintf(password, "JPLGFRGKFPVJIXGU");
+    else if (password[0] == '/')
+        sprintf(password, "THWSWPLWBPXQXPDO");
 
     sockfd = connectPop3(domain, username, password);
-    int option;
-    int selects;
     int len;
     char recvBuffer[BUFF_SIZE];
     char param[BUFF_SIZE];
@@ -87,68 +92,74 @@ int main()
         printf("2.Get mail status\n");
         printf("3.Display mail in detail\n");
         printf("4.Search text in all mails\n");
-        printf("5.display by subjects\n");
+        printf("5.Display by subjects\n");
         printf("6.Download the mail and delete in the remote service\n");
-        printf("7.quit\n");
+        printf("7.Quit\n");
         printf("****************************\n");
         printf("Please choose number:\n>>");
-        scanf("%d", &option);
-        if (option == 7)
+
+        int opt = getchar();
+        clean_stdin();
+
+        switch (opt)
         {
-            close(sockfd);
-            exit(0);
-        }
-        switch (option)
-        {
-        case 1:
+        case '1':
             showList(sockfd, "");
             break;
-        case 2:
+        case '2':
             sendOpt(sockfd, POP3_STAT, "");
             len = recv(sockfd, recvBuffer, BUFF_SIZE, 0);
             printf("%s\n", recvBuffer);
             break;
-        case 3:
+        case '3':
             printf("Input email number to view in detail\n>>");
             scanf("%s", param);
+            clean_stdin();
+
             email = retr(sockfd, "./tmp.eml", param);
             system("cat ./tmp.eml");
             printf("\n\nDecoded Email Subject: %s\n\nContent: %s\n\n", email.subject, email.content);
             system("rm ./tmp.eml");
             break;
-        case 4:
+        case '4':
             printf("Please input the text you want to search:\n>>");
             scanf("%s", param);
+            clean_stdin();
             searchContent(domain, username, param);
             break;
-        case 5:
+        case '5':
             dispSubject(domain, username);
             break;
-        case 6:
+        case '6':
             printf("Input email number:\n>>");
             scanf("%s", param);
+            clean_stdin();
             printf("Please input the filename you want to save:\n>>");
             char filename[50];
             scanf("%s", filename);
+            clean_stdin();
             email = retr(sockfd, filename, param);
             saveTxt(domain, username, email);
             sendOpt(sockfd, POP3_DELE, param);
-            printf("Save successfully and delete from the remote server.");
+            printf("Save successfully and delete from the remote server.\n");
             break;
+        case '7':
+            close(sockfd);
+            exit(0);
         default:
             printf("Invalid option\n");
             break;
         }
-        int selectAfter;
         printf("Press 1 to return to main interface\n");
         printf("Press others to quit\n");
         printf(">>");
-        scanf("%d", &selectAfter);
-        if (selectAfter != 1)
+
+        if (getchar() != '1')
         {
             close(sockfd);
             exit(0);
         }
+        clean_stdin();
     }
 
     return 0;
@@ -165,16 +176,22 @@ int connectPop3(char *domain, char *username, char *password)
     if ((hostPtr = gethostbyname(domain)) == NULL)
     {
         printf("ERROR: failed to parse domain into host.");
-        return 0;
+        exit(1);
     }
     addrListPtr = hostPtr->h_addr_list;
+
     inet_ntop(hostPtr->h_addrtype, *addrListPtr, ipAddr, sizeof(ipAddr));
 
     sockfd = socket(AF_INET, SOCK_STREAM, 0);
     if (sockfd == -1)
     {
         printf("ERROR: Socket create failed");
+        exit(1);
     }
+    struct timeval tv;
+    tv.tv_sec = 3;
+    tv.tv_usec = 0;
+    setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, (const char *)&tv, sizeof tv);
 
     sockAddr.sin_family = AF_INET;
     sockAddr.sin_port = htons(POP3_PORT);
@@ -192,9 +209,9 @@ int connectPop3(char *domain, char *username, char *password)
         printf("Connect: %s", buf);
     }
 
-    if (sendOpt(sockfd, POP3_USER, username) == 1 && isOk(sockfd))
+    if (sendOpt(sockfd, POP3_USER, username) == 1 && recvOk(sockfd))
     {
-        if (sendOpt(sockfd, POP3_PASS, password) == 1 && isOk(sockfd))
+        if (sendOpt(sockfd, POP3_PASS, password) == 1 && recvOk(sockfd))
             return sockfd;
         else
         {
@@ -209,9 +226,8 @@ int connectPop3(char *domain, char *username, char *password)
     }
 }
 
-int isOk(int sockfd)
+int recvOk(int sockfd)
 {
-    
     int recvLen;
     char recvBuffer[BUFF_SIZE];
     memset(recvBuffer, 0, BUFF_SIZE);
@@ -245,7 +261,7 @@ int sendOpt(int sockfd, POP3_OPT opt, char *param)
         msgLen = sprintf(msg, "STAT\r\n");
         break;
     case POP3_LIST:
-        msgLen = param[0] == '\0' ? sprintf(msg, "LIST\r\n") : sprintf(msg, "LIST %s\r\n", param);
+        msgLen = sprintf(msg, "LIST\r\n");
         break;
     case POP3_RETR:
         msgLen = sprintf(msg, "RETR %s\r\n", param);
@@ -258,7 +274,6 @@ int sendOpt(int sockfd, POP3_OPT opt, char *param)
         break;
     }
 
-    
     if ((send(sockfd, msg, msgLen, 0)) != msgLen)
     {
         printf("ERROR: Send msg to POP3 server failed. Please re-login.\n");
@@ -273,31 +288,31 @@ Email retr(int sockfd, char *filename, char *param)
 
     char recvBuffer[BUFF_SIZE_BIG];
     int fd, len;
-    int pos, total = -1;
-    char *t;
+    int pos;
+    char *t, *end;
     sendOpt(sockfd, POP3_RETR, param);
     if ((fd = open(filename, O_CREAT | O_RDWR | O_TRUNC, 0777)) == -1)
     {
         exit(1);
     }
-    bzero(recvBuffer, BUFF_SIZE_BIG);
+    memset(recvBuffer, 0, BUFF_SIZE_BIG);
+    int finishFlag = 0;
     if ((len = recv(sockfd, recvBuffer, BUFF_SIZE_BIG, 0)) > 0)
     {
         if (strncmp(recvBuffer, "+OK", 3) == 0)
         {
-            if ((t = strstr(recvBuffer, " ")) != NULL)
-            {
-                t++;
-                total = atoi(t);
-            }
             if ((t = strstr(recvBuffer, "\r\n")) != NULL)
             {
                 t += 2;
                 pos = (int)(t - recvBuffer);
-
-                if ((len = write(fd, t, len - pos)) == (len - pos))
-                    bzero(recvBuffer, BUFF_SIZE_BIG);
-                pos = len;
+                if ((end = strstr(recvBuffer, "\r\n.\r\n")) != NULL)
+                {
+                    finishFlag = 1;
+                    end += 2;
+                    end[0] = '\0';
+                    len -= 3;
+                }
+                write(fd, t, len - pos);
             }
         }
         else
@@ -306,24 +321,25 @@ Email retr(int sockfd, char *filename, char *param)
             exit(1);
         }
     }
-    while ((len = recv(sockfd, recvBuffer, BUFF_SIZE_BIG, 0)) > 0)
-    {
-        pos += len;
-        if (pos >= total)
-            break;
-        if ((len = write(fd, recvBuffer, len)) == len)
-            bzero(recvBuffer, BUFF_SIZE_BIG);
-
-        else
-            break;
-    }
-    if ((len = write(fd, recvBuffer, len - 3)) == len)
+    while (!finishFlag && ((len = recv(sockfd, recvBuffer, BUFF_SIZE_BIG, 0)) > 0))
     {
 
-        close(fd);
-
-        return decodeEml(filename);
+        if (strncmp(recvBuffer, ".\r\n", 3) == 0)
+        {
+            finishFlag = 1;
+            break;
+        }
+        else if ((end = strstr(recvBuffer, "\r\n.\r\n")) != NULL)
+        {
+            finishFlag = 1;
+            len -= 3;
+            end[0] = '\0';
+        }
+        write(fd, recvBuffer, len);
     }
+
+    close(fd);
+    return decodeEml(filename);
 }
 int showList(int sockfd, char *param)
 {
@@ -333,7 +349,7 @@ int showList(int sockfd, char *param)
     char *t;
 
     sendOpt(sockfd, POP3_LIST, param);
-    bzero(recvBuffer, BUFF_SIZE);
+    memset(recvBuffer, 0, BUFF_SIZE);
     while ((len = recv(sockfd, recvBuffer, BUFF_SIZE, 0)) > 0)
     {
         printf("%s\n", recvBuffer);
@@ -341,56 +357,12 @@ int showList(int sockfd, char *param)
             break;
         else
             strncpy(tmp, recvBuffer, len);
-        bzero(recvBuffer, BUFF_SIZE);
+        memset(recvBuffer, 0, BUFF_SIZE);
     }
-    if (len > 3)
-        recvBuffer[len - 5] = '\0';
 }
-unsigned char *base64_encode(unsigned char *str)
-{
-    long len;
-    long str_len;
-    unsigned char *res;
-    int i, j;
-    
-    unsigned char *base64_table = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-
-    
-    str_len = strlen(str);
-    if (str_len % 3 == 0)
-        len = str_len / 3 * 4;
-    else
-        len = (str_len / 3 + 1) * 4;
-
-    res = malloc(sizeof(unsigned char) * len + 1);
-    res[len] = '\0';
-
-    
-    for (i = 0, j = 0; i < len - 2; j += 3, i += 4)
-    {
-        res[i] = base64_table[str[j] >> 2];                                     
-        res[i + 1] = base64_table[(str[j] & 0x3) << 4 | (str[j + 1] >> 4)];     
-        res[i + 2] = base64_table[(str[j + 1] & 0xf) << 2 | (str[j + 2] >> 6)]; 
-        res[i + 3] = base64_table[str[j + 2] & 0x3f];                           
-    }
-
-    switch (str_len % 3)
-    {
-    case 1:
-        res[i - 2] = '=';
-        res[i - 1] = '=';
-        break;
-    case 2:
-        res[i - 1] = '=';
-        break;
-    }
-
-    return res;
-}
-
 unsigned char *base64_decode(unsigned char *code)
 {
-    
+
     int table[] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -408,9 +380,8 @@ unsigned char *base64_decode(unsigned char *code)
     unsigned char *res;
     int i, j;
 
-    
     len = strlen(code);
-    
+
     if (strstr(code, "=="))
         str_len = len / 4 * 3 - 2;
     else if (strstr(code, "="))
@@ -421,12 +392,12 @@ unsigned char *base64_decode(unsigned char *code)
     res = malloc(sizeof(unsigned char) * str_len + 1);
     res[str_len] = '\0';
 
-    
     for (i = 0, j = 0; i < len - 2; j += 3, i += 4)
     {
-        res[j] = ((unsigned char)table[code[i]]) << 2 | (((unsigned char)table[code[i + 1]]) >> 4);           
-        res[j + 1] = (((unsigned char)table[code[i + 1]]) << 4) | (((unsigned char)table[code[i + 2]]) >> 2); 
-        res[j + 2] = (((unsigned char)table[code[i + 2]]) << 6) | ((unsigned char)table[code[i + 3]]);        
+
+        res[j] = ((unsigned char)table[code[i]]) << 2 | (((unsigned char)table[code[i + 1]]) >> 4);
+        res[j + 1] = (((unsigned char)table[code[i + 1]]) << 4) | (((unsigned char)table[code[i + 2]]) >> 2);
+        res[j + 2] = (((unsigned char)table[code[i + 2]]) << 6) | ((unsigned char)table[code[i + 3]]);
     }
 
     return res;
@@ -434,27 +405,27 @@ unsigned char *base64_decode(unsigned char *code)
 
 int hiddenInput(char *password)
 {
-    
+
     int i = 0;
-    system("stty -icanon"); 
-    system("stty -echo");   
+    system("stty -icanon");
+    system("stty -echo");
     while (i < 16)
     {
-        password[i] = getchar(); 
+        password[i] = getchar();
         if (i == 0 && password[i] == '\b')
         {
-            i = 0; 
+            i = 0;
             password[i] = '\0';
             continue;
         }
         else if (password[i] == '\b')
         {
-            printf("\b \b"); 
+            printf("\b \b");
             password[i] = '\0';
-            i = i - 1; 
-            continue;  
+            i = i - 1;
+            continue;
         }
-        else if (password[i] == '\n') 
+        else if (password[i] == '\n')
         {
             password[i] = '\0';
             break;
@@ -465,16 +436,16 @@ int hiddenInput(char *password)
         }
         i++;
     }
-    system("stty echo");   
-    system("stty icanon"); 
+    system("stty echo");
+    system("stty icanon");
     printf("\n");
     return i;
 }
 
 int substr(char dst[], char src[], int start, int len)
 {
-    char *p = src + start; 
-    int n = strlen(p);     
+    char *p = src + start;
+    int n = strlen(p);
     int i = 0;
     if (n < len)
     {
@@ -485,7 +456,7 @@ int substr(char dst[], char src[], int start, int len)
         dst[i] = src[i + start];
         len--;
         i++;
-    } 
+    }
     dst[i] = '\0';
     return 0;
 }
@@ -497,77 +468,71 @@ Email decodeEml(char *filename)
     char c[BUFF_SIZE_BIG];
     char content[BUFF_SIZE_BIG];
     int find_tp = 0;
-    int find_kg = 0;
-    int find_next_kg = 0;
     int decode = 0;
-    FILE *fptr = fopen(filename, "r");
-    char flag[] = "Content-Type: text/plain;";
 
+    char *contentNowPos = NULL;
+    char *temp;
+
+    int reading = 0;
+    char boundary[BUFF_SIZE];
+    FILE *fptr = fopen(filename, "r");
+    char *textFlag = "Content-Type: text/plain;";
+    int textFlagLen = strlen(textFlag);
+    char *subjectFlag = "Subject: ";
+    int subjectFlagLen = strlen(subjectFlag);
+    char *boundaryFlag = "boundary=\"";
+    int boundaryFlagLen = strlen(boundaryFlag);
+    char *base64Flag = "Content-Transfer-Encoding: base64\r\n";
+
+    memset(boundary, 0, BUFF_SIZE);
+    int ln = 0;
     while (fgets(c, sizeof(c), fptr) != NULL)
     {
-        if (c[0] == 'S' && c[1] == 'u')
+        ln++;
+        if (strncmp(c, subjectFlag, subjectFlagLen) == 0)
         {
-            int pos = strchr(c, '\n') - c - 1;
-            int i = 0;
-            substr(a.subject, c, 9, pos);
-            char *find = strchr(a.subject, '\n');
-            if (find)
-                *find = '\0';
+
+            int len = strstr(c, "\r\n") - c - subjectFlagLen;
+            memset(a.subject, 0, BUFF_SIZE);
+            substr(a.subject, c, subjectFlagLen, len);
+            continue;
+        }
+        if ((temp = strstr(c, boundaryFlag)) != NULL)
+        {
+            int len = strstr(c, "\"\r\n") - temp - boundaryFlagLen;
+            substr(boundary, temp, boundaryFlagLen, len);
+            continue;
         }
 
-        if (!find_kg)
+        if (strncmp(c, textFlag, textFlagLen) == 0)
         {
-            if (!find_tp)
-            {
-                if (!strncmp(c, flag, 24))
-                {
-                    find_tp = 1;
-                }
-            }
-            else
-            {
-                int pos = strchr(c, '\n') - c - 1;
-                if (pos == 0)
-                {
-                    find_kg = 1;
-                }
-            }
+            find_tp = 1;
+            continue;
         }
-        else
-        {
-            if (!find_next_kg)
-            {
-                int pos = strchr(c, '\n') - c - 1;
-                if (pos != 0)
-                {
-                    strcpy(content, c);
-                }
-                else
-                {
-                    find_next_kg = 1;
-                }
-            }
-        }
-        if (!strcmp(c, "Content-Transfer-Encoding: base64\r\n"))
+
+        if (!strcmp(c, base64Flag))
         {
             decode = 1;
+            continue;
+        }
+
+        if (find_tp && strcmp(c, "\r\n") == 0)
+        {
+            memset(content, 0, BUFF_SIZE);
+
+            contentNowPos = content;
+
+            while ((fgets(c, sizeof(c), fptr) != NULL) && (boundary[0] == '\0' || strstr(c, boundary) == NULL) && strncmp(c, "\r\n", 2) != 0)
+            {
+                int len = strlen(c) - 2;
+                strncpy(contentNowPos, c, len);
+
+                contentNowPos += len;
+            }
+            break;
         }
     }
-    char *rnPtr;
-    if (rnPtr = strstr(content, "\n"))
-    {
-        rnPtr[0] = '\0';
-    }
-    printf("ctn:%s\n", content);
-    if (decode == 1)
-    {
-        strcpy(a.content, base64_decode(content));
-    }
-    else
-    {
-        strcpy(a.content, content);
-    }
-    fclose(fptr);
+    strcpy(a.content, decode ? base64_decode(content) : (unsigned char *)content);
     return a;
 }
 
@@ -634,13 +599,13 @@ int dispSubject(char *domain, char *username)
             int begin = strchr(c, '*') - c + 1;
             int end = strchr(c, '\0') - c;
             int len = end - begin;
-            
+
             substr(email_sub, c, begin, len);
 
             begin = strchr(c, '$') - c + 1;
             end = strchr(c, '*') - c;
             len = end - begin;
-            
+
             substr(email_name, c, begin, len);
             printf("the %s mail's Subject is: %s", email_name, email_sub);
         }
