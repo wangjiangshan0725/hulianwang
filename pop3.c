@@ -14,7 +14,6 @@
 #define BUFF_SIZE_BIG 65535
 
 #define POP3_PORT 110
-
 typedef struct EmailStruct //解码后邮件结构体
 {
     char name[BUFF_SIZE];        //本地文件名
@@ -38,13 +37,23 @@ int connectPop3(char *domain, char *username, char *password);
 int sendOpt(int sockfd, POP3_OPT opt, char *param);
 Email retr(int sockfd, char *filename, char *param);
 void saveTxt(char *domain, char *username, Email email);
-int isOk(int sockfd);
+int recvOk(int sockfd);
 int searchContent(char *domain, char *username, char *searching);
 int dispSubject(char *domain, char *username);
 int showList(int sockfd, char *param);
 Email decodeEml(char *filename);
 int hiddenInput(char *password);
 unsigned char *base64_decode(unsigned char *code);
+
+// 代替fflush(stdin)清空scanf后的缓冲区https://stackoverflow.com/questions/17318886/fflush-is-not-working-in-linux
+void clean_stdin(void)
+{
+    int c;
+    do
+    {
+        c = getchar();
+    } while (c != '\n' && c != EOF);
+}
 
 int main()
 {
@@ -54,18 +63,24 @@ int main()
     char domain[BUFF_SIZE];
     printf("Input POP3 server domain:\n>>");
     scanf("%s", domain);
-    fflush(stdin);
+    clean_stdin();
     printf("Input username:\n>>");
     scanf("%s", username);
-    fflush(stdin);
+    clean_stdin();
     printf("Input password:\n>>");
     hiddenInput(password);
     if (domain[0] == '.')
         sprintf(domain, "pop3.126.com");
+    else if (domain[0] == '/')
+        sprintf(domain, "pop3.163.com");
     if (username[0] == '.')
         sprintf(username, "hill010725");
+    else if (username[0] == '/')
+        sprintf(username, "YikaiWang2001");
     if (password[0] == '.')
         sprintf(password, "JPLGFRGKFPVJIXGU");
+    else if (password[0] == '/')
+        sprintf(password, "THWSWPLWBPXQXPDO");
 
     sockfd = connectPop3(domain, username, password);
     int len;
@@ -84,8 +99,9 @@ int main()
         printf("7.Quit\n");
         printf("****************************\n");
         printf("Please choose number:\n>>");
-        fflush(stdin);
+
         int opt = getchar();
+        clean_stdin();
 
         switch (opt)
         {
@@ -100,7 +116,7 @@ int main()
         case '3':
             printf("Input email number to view in detail\n>>");
             scanf("%s", param);
-            fflush(stdin);
+            clean_stdin();
 
             email = retr(sockfd, "./tmp.eml", param);
             system("cat ./tmp.eml");
@@ -110,7 +126,7 @@ int main()
         case '4':
             printf("Please input the text you want to search:\n>>");
             scanf("%s", param);
-            fflush(stdin);
+            clean_stdin();
             searchContent(domain, username, param);
             break;
         case '5':
@@ -119,11 +135,11 @@ int main()
         case '6':
             printf("Input email number:\n>>");
             scanf("%s", param);
-            fflush(stdin);
+            clean_stdin();
             printf("Please input the filename you want to save:\n>>");
             char filename[50];
             scanf("%s", filename);
-            fflush(stdin);
+            clean_stdin();
             email = retr(sockfd, filename, param);
             saveTxt(domain, username, email);
             sendOpt(sockfd, POP3_DELE, param);
@@ -139,13 +155,13 @@ int main()
         printf("Press 1 to return to main interface\n");
         printf("Press others to quit\n");
         printf(">>");
-        fflush(stdin);
 
         if (getchar() != '1')
         {
             close(sockfd);
             exit(0);
         }
+        clean_stdin();
     }
 
     return 0;
@@ -197,9 +213,9 @@ int connectPop3(char *domain, char *username, char *password)
     }
 
     //依次发送USER和PASS且检查是否OK，全部OK返回sockfd
-    if (sendOpt(sockfd, POP3_USER, username) == 1 && isOk(sockfd))
+    if (sendOpt(sockfd, POP3_USER, username) == 1 && recvOk(sockfd))
     {
-        if (sendOpt(sockfd, POP3_PASS, password) == 1 && isOk(sockfd))
+        if (sendOpt(sockfd, POP3_PASS, password) == 1 && recvOk(sockfd))
             return sockfd;
         else
         {
@@ -214,7 +230,7 @@ int connectPop3(char *domain, char *username, char *password)
     }
 }
 
-int isOk(int sockfd)
+int recvOk(int sockfd)
 {
     int recvLen;
     char recvBuffer[BUFF_SIZE];
@@ -457,8 +473,6 @@ Email decodeEml(char *filename)
     char c[BUFF_SIZE_BIG];
     char content[BUFF_SIZE_BIG];
     int find_tp = 0;
-    int find_kg = 0;
-    int find_next_kg = 0;
     int decode = 0;
 
     char *contentNowPos = NULL;
@@ -506,27 +520,21 @@ Email decodeEml(char *filename)
             decode = 1;
             continue;
         }
-        //如果已经找到过text/plain且找到空行
-        if (!reading && find_tp && strcmp(c, "\r\n") == 0)
+        //如果已经找到过text/plain且找到空行，开始读取
+        if (find_tp && strcmp(c, "\r\n") == 0)
         {
-            reading = 1;
             memset(content, 0, BUFF_SIZE);
             //将待写入的地方置为content起始
             contentNowPos = content;
-            continue;
-        }
-        if (reading)
-        {
-            if ((boundary[0] != '\0' && strstr(c, boundary) != NULL) || strncmp(c, "\r\n", 2) == 0)
+            //读接下来的行，且该行无boundary，或者不为空行
+            while ((fgets(c, sizeof(c), fptr) != NULL) && (boundary[0] == '\0' || strstr(c, boundary) == NULL) && strncmp(c, "\r\n", 2) != 0)
             {
-                //如果在读取状态 且碰到boundary或空行则结束
-                break;
+                int len = strlen(c) - 2;
+                strncpy(contentNowPos, c, len);
+                //下一行待写入的地方是这一行结束后
+                contentNowPos += len;
             }
-
-            int len = strlen(c) - 2;
-            strncpy(contentNowPos, c, len);
-            //下一行待写入的地方是这一行结束后
-            contentNowPos += len;
+            break;
         }
     }
     strcpy(a.content, decode ? base64_decode(content) : (unsigned char *)content);
