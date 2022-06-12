@@ -14,14 +14,14 @@
 #define BUFF_SIZE_BIG 65535
 
 #define POP3_PORT 110
-typedef struct EmailStruct //解码后邮件结构体
+typedef struct EmailStruct       //解码后的邮件结构体
 {
     char name[BUFF_SIZE];        //本地文件名
-    char subject[BUFF_SIZE];     //主题
-    char content[BUFF_SIZE_BIG]; //正文
+    char subject[BUFF_SIZE];     //邮件主题
+    char content[BUFF_SIZE_BIG]; //解码后的正文
 } Email;
 
-typedef enum POP3_OPTS // POP3操作枚举
+typedef enum POP3_OPTS           // POP3操作枚举
 {
     POP3_USER = 1,
     POP3_PASS,
@@ -43,7 +43,7 @@ int dispSubject(char *domain, char *username);
 int showList(int sockfd, char *param);
 Email decodeEml(char *filename);
 int hiddenInput(char *password);
-unsigned char *base64_decode(unsigned char *code);
+unsigned char * base64_decode(unsigned char *code);
 
 // 代替fflush(stdin)清空scanf后的缓冲区https://stackoverflow.com/questions/17318886/fflush-is-not-working-in-linux
 void clean_stdin(void)
@@ -69,6 +69,8 @@ int main()
     clean_stdin();
     printf("Input password:\n>>");
     hiddenInput(password);
+
+    // 为了方便测试，设置126和163邮箱做为两个默认值。
     if (domain[0] == '.')
         sprintf(domain, "pop3.126.com");
     else if (domain[0] == '/')
@@ -82,6 +84,7 @@ int main()
     else if (password[0] == '/')
         sprintf(password, "THWSWPLWBPXQXPDO");
 
+    // 使用pop3连接并使用用户名和密码登录
     sockfd = connectPop3(domain, username, password);
     int len;
     char recvBuffer[BUFF_SIZE];
@@ -106,11 +109,11 @@ int main()
         switch (opt)
         {
         case '1':
-            showList(sockfd, "");
+            showList(sockfd, "");                           // 显示每个邮件大小
             break;
         case '2':
-            sendOpt(sockfd, POP3_STAT, "");
-            len = recv(sockfd, recvBuffer, BUFF_SIZE, 0);
+            sendOpt(sockfd, POP3_STAT, "");                 // 将POP3_STAT消息发送给pop3 server
+            len = recv(sockfd, recvBuffer, BUFF_SIZE, 0);   // 接收信息
             printf("%s\n", recvBuffer);
             break;
         case '3':
@@ -118,19 +121,19 @@ int main()
             scanf("%s", param);
             clean_stdin();
 
-            email = retr(sockfd, "./tmp.eml", param);
-            system("cat ./tmp.eml");
+            email = retr(sockfd, "./tmp.eml", param);       // 将选择的邮件临时下载，得到Email结构体，其中包含邮件主题和已解码的正文
+            system("cat ./tmp.eml");                        // 执行cat ./tmp.eml命令，查看邮件解码前内容
             printf("\n\nDecoded Email Subject: %s\n\nContent: %s\n\n", email.subject, email.content);
-            system("rm ./tmp.eml");
+            system("rm ./tmp.eml");                         // 删除邮件
             break;
         case '4':
             printf("Please input the text you want to search:\n>>");
             scanf("%s", param);
             clean_stdin();
-            searchContent(domain, username, param);
+            searchContent(domain, username, param);         // 查找内容
             break;
         case '5':
-            dispSubject(domain, username);
+            dispSubject(domain, username);                  // 显示主题
             break;
         case '6':
             printf("Input email number:\n>>");
@@ -140,9 +143,9 @@ int main()
             char filename[50];
             scanf("%s", filename);
             clean_stdin();
-            email = retr(sockfd, filename, param);
-            saveTxt(domain, username, email);
-            sendOpt(sockfd, POP3_DELE, param);
+            email = retr(sockfd, filename, param);          // 以用户指定的文件名储存邮件，并获得邮件内容。
+            saveTxt(domain, username, email);               // 将邮件相关信息写入txt文件
+            sendOpt(sockfd, POP3_DELE, param);              // 在服务器中删除该邮件
             printf("Save successfully and delete from the remote server.\n");
             break;
         case '7':
@@ -175,14 +178,14 @@ int connectPop3(char *domain, char *username, char *password)
     char ipAddr[32];
     struct hostent *hostPtr;
 
-    //将域名转换为主机结构
+    // 将域名转换为主机结构
     if ((hostPtr = gethostbyname(domain)) == NULL)
     {
         printf("ERROR: failed to parse domain into host.");
         exit(1);
     }
     addrListPtr = hostPtr->h_addr_list;
-    //主机结构中的二进制ip地址转点分ip地址，传入connect
+    // 主机结构中的二进制ip地址转点分ip地址，传入connect
     inet_ntop(hostPtr->h_addrtype, *addrListPtr, ipAddr, sizeof(ipAddr));
 
     sockfd = socket(AF_INET, SOCK_STREAM, 0);
@@ -192,9 +195,9 @@ int connectPop3(char *domain, char *username, char *password)
         exit(1);
     }
     struct timeval tv;
-    tv.tv_sec = 3; //接收超时，单位秒
+    tv.tv_sec = 3; // 接收超时，单位秒
     tv.tv_usec = 0;
-    setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, (const char *)&tv, sizeof tv); //设置接收超时时间
+    setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, (const char *)&tv, sizeof tv); // 设置接收超时时间
 
     sockAddr.sin_family = AF_INET;
     sockAddr.sin_port = htons(POP3_PORT);
@@ -212,7 +215,7 @@ int connectPop3(char *domain, char *username, char *password)
         printf("Connect: %s", buf);
     }
 
-    //依次发送USER和PASS且检查是否OK，全部OK返回sockfd
+    // 依次发送USER和PASS且检查是否OK，全部OK返回sockfd
     if (sendOpt(sockfd, POP3_USER, username) == 1 && recvOk(sockfd))
     {
         if (sendOpt(sockfd, POP3_PASS, password) == 1 && recvOk(sockfd))
@@ -303,20 +306,21 @@ Email retr(int sockfd, char *filename, char *param)
     int finishFlag = 0;
     if ((len = recv(sockfd, recvBuffer, BUFF_SIZE_BIG, 0)) > 0)
     {
+        // 回复可能有多个报，一些包可能会合并。需要判断每种情况
         if (strncmp(recvBuffer, "+OK", 3) == 0)
         {
-            if ((t = strstr(recvBuffer, "\r\n")) != NULL)
+            if ((t = strstr(recvBuffer, "\r\n")) != NULL)            // \r\n为换行符
             {
                 t += 2;
-                pos = (int)(t - recvBuffer);                         //找邮件体到消息体的长度
-                if ((end = strstr(recvBuffer, "\r\n.\r\n")) != NULL) //如果有结束符就结束，如果全在第一个报文，.前肯定有换行符
+                pos = (int)(t - recvBuffer);                         // 找邮件体到消息体的长度
+                if ((end = strstr(recvBuffer, "\r\n.\r\n")) != NULL) // 如果有结束符就结束，如果全在第一个报文，.前肯定有换行符
                 {
                     finishFlag = 1;
                     end += 2;
-                    end[0] = '\0'; //截断.后内容
+                    end[0] = '\0';          // 截断.后内容
                     len -= 3;
                 }
-                write(fd, t, len - pos); //写从邮件体开始到结束的
+                write(fd, t, len - pos);    // 写从邮件体开始到结束的
             }
         }
         else
@@ -327,7 +331,7 @@ Email retr(int sockfd, char *filename, char *param)
     }
     while (!finishFlag && ((len = recv(sockfd, recvBuffer, BUFF_SIZE_BIG, 0)) > 0))
     {
-        //最后一个包可能没有前导换行符，直接以这个.开始
+        // 最后一个包可能没有前导换行符，直接以这个.开始
         if (strncmp(recvBuffer, ".\r\n", 3) == 0)
         {
             finishFlag = 1;
@@ -345,6 +349,7 @@ Email retr(int sockfd, char *filename, char *param)
     close(fd);
     return decodeEml(filename);
 }
+
 int showList(int sockfd, char *param)
 {
     char recvBuffer[BUFF_SIZE];
@@ -364,9 +369,10 @@ int showList(int sockfd, char *param)
         memset(recvBuffer, 0, BUFF_SIZE);
     }
 }
+
 unsigned char *base64_decode(unsigned char *code)
 {
-    //根据base64表，以字符找到对应的十进制数据
+    // 根据base64表，以字符找到对应的十进制数据
     int table[] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -383,9 +389,9 @@ unsigned char *base64_decode(unsigned char *code)
     long str_len;
     unsigned char *res;
     int i, j;
-    //计算解码后的字符串长度
+    // 计算解码后的字符串长度
     len = strlen(code);
-    //判断编码后的字符串后是否有=
+    // 判断编码后的字符串后是否有=
     if (strstr(code, "=="))
         str_len = len / 4 * 3 - 2;
     else if (strstr(code, "="))
@@ -396,13 +402,15 @@ unsigned char *base64_decode(unsigned char *code)
     res = malloc(sizeof(unsigned char) * str_len + 1);
     res[str_len] = '\0';
 
-    //以4个字符为一位进行解码
+    // 以4个字符为一位进行解码
     for (i = 0, j = 0; i < len - 2; j += 3, i += 4)
     {
-
-        res[j] = ((unsigned char)table[code[i]]) << 2 | (((unsigned char)table[code[i + 1]]) >> 4);           //取出第一个字符对应base64表的十进制数的前6位与第二个字符对应base64表的十进制数的后2位进行组合
-        res[j + 1] = (((unsigned char)table[code[i + 1]]) << 4) | (((unsigned char)table[code[i + 2]]) >> 2); //取出第二个字符对应base64表的十进制数的后4位与第三个字符对应bas464表的十进制数的后4位进行组合
-        res[j + 2] = (((unsigned char)table[code[i + 2]]) << 6) | ((unsigned char)table[code[i + 3]]);        //取出第三个字符对应base64表的十进制数的后2位与第4个字符进行组合
+        // 取出第一个字符对应base64表的十进制数的前6位与第二个字符对应base64表的十进制数的后2位进行组合
+        res[j] = ((unsigned char)table[code[i]]) << 2 | (((unsigned char)table[code[i + 1]]) >> 4);           
+        // 取出第二个字符对应base64表的十进制数的后4位与第三个字符对应bas464表的十进制数的后4位进行组合
+        res[j + 1] = (((unsigned char)table[code[i + 1]]) << 4) | (((unsigned char)table[code[i + 2]]) >> 2); 
+        // 取出第三个字符对应base64表的十进制数的后2位与第4个字符进行组合
+        res[j + 2] = (((unsigned char)table[code[i + 2]]) << 6) | ((unsigned char)table[code[i + 3]]);        
     }
 
     return res;
@@ -412,25 +420,25 @@ int hiddenInput(char *password)
 {
     // https://blog.csdn.net/qq_44192078/article/details/104412489
     int i = 0;
-    system("stty -icanon"); //设置一次性读完操作，即getchar()不用回车也能获取字符
-    system("stty -echo");   //关闭回显，即输入任何字符都不显示
+    system("stty -icanon");             // 设置一次性读完操作，即getchar()不用回车也能获取字符
+    system("stty -echo");               // 关闭回显，即输入任何字符都不显示
     while (i < 16)
     {
-        password[i] = getchar(); //获取键盘的值到数组中
+        password[i] = getchar();        // 获取键盘的值到数组中
         if (i == 0 && password[i] == '\b')
         {
-            i = 0; //若开始没有值，输入删除，则，不算值
+            i = 0;                      // 若开始没有值，输入删除，则，不算值
             password[i] = '\0';
             continue;
         }
         else if (password[i] == '\b')
         {
-            printf("\b \b"); //若删除，则光标前移，输空格覆盖，再光标前移
+            printf("\b \b");            // 若删除，则光标前移，输空格覆盖，再光标前移
             password[i] = '\0';
-            i = i - 1; //返回到前一个值继续输入
-            continue;  //结束当前循环
+            i = i - 1;                  // 返回到前一个值继续输入
+            continue;                   // 结束当前循环
         }
-        else if (password[i] == '\n') //若按回车则，输入结束
+        else if (password[i] == '\n')   // 若按回车则，输入结束
         {
             password[i] = '\0';
             break;
@@ -441,27 +449,27 @@ int hiddenInput(char *password)
         }
         i++;
     }
-    system("stty echo");   //开启回显
-    system("stty icanon"); //关闭一次性读完操作，即getchar()必须回车也能获取字符
+    system("stty echo");                // 开启回显
+    system("stty icanon");              // 关闭一次性读完操作，即getchar()必须回车也能获取字符
     printf("\n");
     return i;
 }
 
-int substr(char dst[], char src[], int start, int len)
+int substr(char dst[], char src[], int start, int len) // 获得子字符串
 {
-    char *p = src + start; //定义指针变量指向需要提取的字符的地址
-    int n = strlen(p);     //求字符串长度
+    char *p = src + start;              // 定义指针变量指向需要提取的字符的地址
+    int n = strlen(p);                  // 求字符串长度
     int i = 0;
     if (n < len)
     {
         len = n;
     }
-    while (len != 0)
+    while (len != 0)                    // 复制字符串到dst中
     {
         dst[i] = src[i + start];
         len--;
         i++;
-    } //复制字符串到dst中
+    } 
     dst[i] = '\0';
     return 0;
 }
@@ -496,7 +504,7 @@ Email decodeEml(char *filename)
         ln++;
         if (strncmp(c, subjectFlag, subjectFlagLen) == 0)
         {
-            //找到主题字符串长度，用末尾指针减行首指针
+            // 找到主题字符串长度，用末尾指针减行首指针
             int len = strstr(c, "\r\n") - c - subjectFlagLen;
             memset(a.subject, 0, BUFF_SIZE);
             substr(a.subject, c, subjectFlagLen, len);
@@ -520,18 +528,18 @@ Email decodeEml(char *filename)
             decode = 1;
             continue;
         }
-        //如果已经找到过text/plain且找到空行，开始读取
+        // 如果已经找到过text/plain且找到空行，开始读取
         if (find_tp && strcmp(c, "\r\n") == 0)
         {
             memset(content, 0, BUFF_SIZE);
-            //将待写入的地方置为content起始
+            // 将待写入的地方置为content起始
             contentNowPos = content;
-            //读接下来的行，且该行无boundary，或者不为空行
+            // 读接下来的行，且该行无boundary，或者不为空行
             while ((fgets(c, sizeof(c), fptr) != NULL) && (boundary[0] == '\0' || strstr(c, boundary) == NULL) && strncmp(c, "\r\n", 2) != 0)
             {
                 int len = strlen(c) - 2;
                 strncpy(contentNowPos, c, len);
-                //下一行待写入的地方是这一行结束后
+                // 下一行待写入的地方是这一行结束后
                 contentNowPos += len;
             }
             break;
@@ -543,6 +551,7 @@ Email decodeEml(char *filename)
 
 int searchContent(char *domain, char *username, char *searching)
 {
+    // 在txt文件中寻找用户指定的信息
     int cnt_email = 0;
     int cnt_find_email = 0;
     char filename[100];
@@ -586,6 +595,8 @@ int searchContent(char *domain, char *username, char *searching)
 
 int dispSubject(char *domain, char *username)
 {
+    // 邮件在下载时，相关信息已写入domain_username.txt
+    // 只需读取该txt文件，取出主题部分。
     char filename[100];
     sprintf(filename, "%s_%s.txt", domain, username);
     char c[1000];
@@ -597,28 +608,26 @@ int dispSubject(char *domain, char *username)
     }
     while (fgets(c, sizeof(c), fptr1) != NULL)
     {
-        if (!strncmp(c, "-=-=boundary", 8))
+        if (!strncmp(c, "-=-=boundary", 8))         //分隔符，用于分隔两封邮件。
         {
             char email_name[BUFF_SIZE];
             char email_sub[BUFF_SIZE];
-            int begin = strchr(c, '*') - c + 1;
+            int begin = strchr(c, '*') - c + 1;     // 邮件主题为txt文件每行中字符'*'之后的部分
             int end = strchr(c, '\0') - c;
             int len = end - begin;
-            //    		文件最后一行加换行符
             substr(email_sub, c, begin, len);
 
-            begin = strchr(c, '$') - c + 1;
+            begin = strchr(c, '$') - c + 1;         
             end = strchr(c, '*') - c;
             len = end - begin;
-            //    		文件最后一行加换行符
-            substr(email_name, c, begin, len);
+            substr(email_name, c, begin, len);      // 邮件名为txt文件中'$'和'*'之间的部分
             printf("the %s mail's Subject is: %s", email_name, email_sub);
         }
     }
     fclose(fptr1);
 }
 
-void saveTxt(char *domain, char *username, Email email)
+void saveTxt(char *domain, char *username, Email email)     // 将邮件信息写入txt文件
 {
     char filename[BUFF_SIZE];
     sprintf(filename, "%s_%s.txt", domain, username);
